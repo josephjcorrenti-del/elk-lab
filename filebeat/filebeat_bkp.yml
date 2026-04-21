@@ -1,0 +1,20 @@
+filebeat.inputs:
+  - type: filestream
+    id: python_lab_runlog
+    paths:
+      - /var/log/python-lab/run.log
+    parsers:
+      - ndjson:
+          target: "py"
+          add_error_key: true
+
+fields:
+  app: python-lab
+fields_under_root: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+setup.template.enabled: true
+logging.level: info
+

@@ -1,0 +1,158 @@
+filebeat.inputs:
+  # -------------------------
+  # Python NDJSON
+  # -------------------------
+  - type: filestream
+    id: python_lab_runlog
+    paths:
+      - /var/log/python-lab/run.log
+    parsers:
+      - ndjson:
+          target: "py"
+          add_error_key: true
+    fields_under_root: true
+    fields:
+      app: python-lab
+      service.name: python-lab
+      event.dataset: python-lab.runlog
+    tags: ["python-lab"]
+
+  # -------------------------
+  # OpenVPN runtime log
+  # -------------------------
+  - type: filestream
+    id: openvpn_runtime
+    paths:
+      - /var/log/openvpn/openvpn.log
+    fields_under_root: true
+    fields:
+      service.name: openvpn
+      role: vpn-server
+      event.dataset: openvpn.runtime
+    tags: ["openvpn"]
+
+  # -------------------------
+  # OpenVPN status log
+  # -------------------------
+  - type: filestream
+    id: openvpn_status
+    paths:
+      - /var/log/openvpn/status.log
+    fields_under_root: true
+    fields:
+      service.name: openvpn
+      role: vpn-server
+      event.dataset: openvpn.status
+    tags: ["openvpn"]
+
+processors:
+  # ---- Python mapping -> ECS-ish log.* ----
+  - if:
+      equals:
+        service.name: "python-lab"
+    then:
+      - copy_fields:
+          fields:
+            - from: py.level
+              to: log.level
+            - from: py.logger
+              to: log.logger
+            - from: py.fn
+              to: log.origin.function
+            - from: py.module
+              to: log.origin.file.name
+            - from: py.run_id
+              to: labels.run_id
+            - from: py.event
+              to: event.action
+            - from: py.message
+              to: message
+          ignore_missing: true
+          fail_on_error: false
+      - add_fields:
+          target: event
+          fields:
+            kind: event
+
+  # ---- OpenVPN runtime parsing ----
+  - if:
+      equals:
+        event.dataset: "openvpn.runtime"
+    then:
+      - add_fields:
+          target: event
+          fields:
+            kind: event
+
+      - dissect:
+          tokenizer: "%{openvpn.peer}/%{openvpn.proto}:%{source.ip}:%{source.port} %{openvpn.rest}"
+          field: "message"
+          target_prefix: ""
+          ignore_failure: true
+
+      - dissect:
+          tokenizer: "%{}CN=%{tls.client.subject}"
+          field: "message"
+          target_prefix: ""
+          ignore_failure: true
+
+      - script:
+          lang: javascript
+          id: openvpn_runtime_action_outcome
+          source: >
+            function process(event) {
+              var msg = event.Get("message");
+              if (!msg) return;
+
+              if (msg.indexOf("VERIFY OK") !== -1) {
+                event.Put("event.action","tls_verify");
+                event.Put("event.outcome","success");
+                event.Put("openvpn.event","VERIFY_OK");
+              } else if (msg.indexOf("VERIFY KU OK") !== -1) {
+                event.Put("event.action","tls_verify");
+                event.Put("event.outcome","success");
+                event.Put("openvpn.event","VERIFY_KU_OK");
+              } else if (msg.indexOf("AUTH_FAILED") !== -1) {
+                event.Put("event.action","auth");
+                event.Put("event.outcome","failure");
+                event.Put("openvpn.event","AUTH_FAILED");
+              } else if (msg.indexOf("TLS Error") !== -1 || msg.indexOf("TLS_ERROR") !== -1) {
+                event.Put("event.action","tls");
+                event.Put("event.outcome","failure");
+                event.Put("openvpn.event","TLS_ERROR");
+              } else if (msg.indexOf("Peer Connection Initiated") !== -1) {
+                event.Put("event.action","connect");
+                event.Put("event.outcome","success");
+                event.Put("openvpn.event","PEER_CONNECTION_INITIATED");
+              }
+            }
+
+  # ---- OpenVPN status parsing (CLIENT_LIST / ROUTING_TABLE) ----
+  - if:
+      equals:
+        event.dataset: "openvpn.status"
+    then:
+      - add_fields:
+          target: event
+          fields:
+            kind: metric
+
+      # Parse CLIENT_LIST rows
+      - dissect:
+          tokenizer: "CLIENT_LIST,%{openvpn.common_name},%{openvpn.real_address},%{openvpn.virtual_address},%{openvpn.virtual_ipv6},%{openvpn.bytes_received},%{openvpn.bytes_sent},%{openvpn.connected_since},%{openvpn.connected_since_epoch},%{openvpn.username},%{openvpn.client_id},%{openvpn.peer_id},%{openvpn.data_cipher}"
+          field: "message"
+          target_prefix: ""
+          ignore_failure: true
+
+      # Parse ROUTING_TABLE rows
+      - dissect:
+          tokenizer: "ROUTING_TABLE,%{openvpn.virtual_address},%{openvpn.common_name},%{openvpn.real_address},%{openvpn.last_ref},%{openvpn.last_ref_epoch}"
+          field: "message"
+          target_prefix: ""
+          ignore_failure: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+setup.template.enabled: true
+logging.level: info
