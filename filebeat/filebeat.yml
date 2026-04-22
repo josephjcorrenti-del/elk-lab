@@ -18,6 +18,24 @@ filebeat.inputs:
     tags: ["python-lab"]
 
   # -------------------------
+  # ollama_workbench NDJSON
+  # -------------------------
+  - type: filestream
+    id: ollama_workbench_runlog
+    paths:
+      - /var/log/ollama_workbench/run.log
+    parsers:
+      - ndjson:
+          target: "owb"
+          add_error_key: true
+    fields_under_root: true
+    fields:
+      app: ollama-workbench
+      service.name: ollama-workbench
+      event.dataset: ollama-workbench.runlog
+    tags: ["ollama-workbench"]
+
+  # -------------------------
   # OpenVPN runtime log
   # -------------------------
   - type: filestream
@@ -66,6 +84,34 @@ processors:
             - from: py.event
               to: event.action
             - from: py.message
+              to: message
+          ignore_missing: true
+          fail_on_error: false
+      - add_fields:
+          target: event
+          fields:
+            kind: event
+
+  # ---- ollama_workbench mapping -> ECS-ish log.* ----
+  - if:
+      equals:
+        service.name: "ollama-workbench"
+    then:
+      - copy_fields:
+          fields:
+            - from: owb.level
+              to: log.level
+            - from: owb.logger
+              to: log.logger
+            - from: owb.fn
+              to: log.origin.function
+            - from: owb.module
+              to: log.origin.file.name
+            - from: owb.run_id
+              to: labels.run_id
+            - from: owb.event
+              to: event.action
+            - from: owb.message
               to: message
           ignore_missing: true
           fail_on_error: false

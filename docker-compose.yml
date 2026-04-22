@@ -26,7 +26,8 @@ services:
     user: root
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /home/joe/python-lab/logs/run.log:/var/log/python-lab/run.log:ro
+      - /home/joe/python-lab/logs:/var/log/python-lab:ro
+      - /home/joe/ai/data/ollama_workbench/logs:/var/log/ollama_workbench:ro
     depends_on:
       - elasticsearch
 
