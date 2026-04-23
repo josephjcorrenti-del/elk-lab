@@ -113,6 +113,12 @@ processors:
               to: event.action
             - from: owb.message
               to: message
+            - from: owb.event_outcome
+              to: event.outcome
+            - from: owb.error_message
+              to: error.message
+            - from: owb.error_type
+              to: error.type
           ignore_missing: true
           fail_on_error: false
       - add_fields:
