@@ -1,14 +1,17 @@
-# ELK Lab
+## Observability
 
-Local Docker-based ELK lab for structured log ingestion and Kibana exploration.
+This setup ingests structured NDJSON logs from:
 
-## Current scope
-- Elasticsearch
-- Kibana
-- Filebeat
-- Local host log mounts for lab projects
+- python-lab
+- ollama_workbench
+- openvpn
 
-## Notes
-- Local-only lab
-- Host paths are explicit and machine-specific by design for now
-- Filebeat config should remain inspectable and simple
+Key fields:
+- service.name
+- event.dataset
+- event.action
+- event.outcome
+- error.message / error.type
+- owb.elapsed_ms (app-level timing)
+
+Logs are shipped via Filebeat and visualized in Kibana.
