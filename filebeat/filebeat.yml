@@ -36,6 +36,24 @@ filebeat.inputs:
     tags: ["ollama-workbench"]
 
   # -------------------------
+  # local_search NDJSON
+  # -------------------------
+  - type: filestream
+    id: local_search_runlog
+    paths:
+      - /var/log/local_search/run.log
+    parsers:
+      - ndjson:
+          target: "local_search"
+          add_error_key: true
+    fields_under_root: true
+    fields:
+      app: local-search
+      service.name: local-search
+      event.dataset: local-search.runlog
+    tags: ["local-search"]
+
+  # -------------------------
   # OpenVPN runtime log
   # -------------------------
   - type: filestream
@@ -119,12 +137,59 @@ processors:
               to: error.message
             - from: owb.error_type
               to: error.type
+            - from: owb.elapsed_ms
+              to: labels.elapsed_ms
           ignore_missing: true
           fail_on_error: false
       - add_fields:
           target: event
           fields:
             kind: event
+
+  # ---- local_search mapping -> ECS-ish log.* ----
+  - if:
+      equals:
+        service.name: "local-search"
+    then:
+      - copy_fields:
+          fields:
+            - from: local_search.level
+              to: log.level
+            - from: local_search.logger
+              to: log.logger
+            - from: local_search.fn
+              to: log.origin.function
+            - from: local_search.module
+              to: log.origin.file.name
+            - from: local_search.run_id
+              to: labels.run_id
+            - from: local_search.event
+              to: event.action
+            - from: local_search.message
+              to: message
+            - from: local_search.event_outcome
+              to: event.outcome
+            - from: local_search.error_message
+              to: error.message
+            - from: local_search.error_type
+              to: error.type
+            - from: local_search.elapsed_ms
+              to: labels.elapsed_ms
+          ignore_missing: true
+          fail_on_error: false
+      - timestamp:
+          field: local_search.ts
+          target_field: "@timestamp"
+          layouts:
+            - "2006-01-02T15:04:05Z"
+          test:
+            - "2026-05-18T12:23:10Z"
+          ignore_missing: true
+          fail_on_error: false
+      - add_fields:
+          target: event
+          fields:
+            kind: event              
 
   # ---- OpenVPN runtime parsing ----
   - if:
