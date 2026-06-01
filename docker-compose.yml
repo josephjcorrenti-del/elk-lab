@@ -28,6 +28,7 @@ services:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /home/joe/python-lab/logs:/var/log/python-lab:ro
       - /home/joe/ai/data/ollama_workbench/logs:/var/log/ollama_workbench:ro
+      - /home/joe/local_search/data/local_search/logs:/var/log/local_search:ro
     depends_on:
       - elasticsearch
 
