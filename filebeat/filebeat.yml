@@ -18,22 +18,22 @@ filebeat.inputs:
     tags: ["python-lab"]
 
   # -------------------------
-  # ollama_workbench NDJSON
+  # local_ai NDJSON
   # -------------------------
   - type: filestream
-    id: ollama_workbench_runlog
+    id: local_ai_runlog
     paths:
-      - /var/log/ollama_workbench/run.log
+      - /var/log/local_ai/run.log
     parsers:
       - ndjson:
-          target: "owb"
+          target: "local_ai"
           add_error_key: true
     fields_under_root: true
     fields:
-      app: ollama-workbench
-      service.name: ollama-workbench
-      event.dataset: ollama-workbench.runlog
-    tags: ["ollama-workbench"]
+      app: local-ai
+      service.name: local-ai
+      event.dataset: local-ai.runlog
+    tags: ["local-ai"]
 
   # -------------------------
   # local_search NDJSON
@@ -52,6 +52,24 @@ filebeat.inputs:
       service.name: local-search
       event.dataset: local-search.runlog
     tags: ["local-search"]
+
+  # -------------------------
+  # local_ai_search NDJSON
+  # -------------------------
+  - type: filestream
+    id: local_ai_search_runlog
+    paths:
+      - /var/log/local_ai_search/run.log
+    parsers:
+      - ndjson:
+          target: "local_ai_search"
+          add_error_key: true
+    fields_under_root: true
+    fields:
+      app: local-ai-search
+      service.name: local-ai-search
+      event.dataset: local-ai-search.runlog
+    tags: ["local-ai-search"]
 
   # -------------------------
   # OpenVPN runtime log
@@ -110,34 +128,34 @@ processors:
           fields:
             kind: event
 
-  # ---- ollama_workbench mapping -> ECS-ish log.* ----
+  # ---- local_ai mapping -> ECS-ish log.* ----
   - if:
       equals:
-        service.name: "ollama-workbench"
+        service.name: "local-ai"
     then:
       - copy_fields:
           fields:
-            - from: owb.level
+            - from: local_ai.level
               to: log.level
-            - from: owb.logger
+            - from: local_ai.logger
               to: log.logger
-            - from: owb.fn
+            - from: local_ai.fn
               to: log.origin.function
-            - from: owb.module
+            - from: local_ai.module
               to: log.origin.file.name
-            - from: owb.run_id
+            - from: local_ai.run_id
               to: labels.run_id
-            - from: owb.event
+            - from: local_ai.event
               to: event.action
-            - from: owb.message
+            - from: local_ai.message
               to: message
-            - from: owb.event_outcome
+            - from: local_ai.event_outcome
               to: event.outcome
-            - from: owb.error_message
+            - from: local_ai.error_message
               to: error.message
-            - from: owb.error_type
+            - from: local_ai.error_type
               to: error.type
-            - from: owb.elapsed_ms
+            - from: local_ai.elapsed_ms
               to: labels.elapsed_ms
           ignore_missing: true
           fail_on_error: false
@@ -189,7 +207,52 @@ processors:
       - add_fields:
           target: event
           fields:
-            kind: event              
+            kind: event      
+
+  # ---- local_ai_search mapping -> ECS-ish log.* ----
+  - if:
+      equals:
+        service.name: "local-ai-search"
+    then:
+      - copy_fields:
+          fields:
+            - from: local_ai_search.level
+              to: log.level
+            - from: local_ai_search.logger
+              to: log.logger
+            - from: local_ai_search.fn
+              to: log.origin.function
+            - from: local_ai_search.module
+              to: log.origin.file.name
+            - from: local_ai_search.run_id
+              to: labels.run_id
+            - from: local_ai_search.event
+              to: event.action
+            - from: local_ai_search.message
+              to: message
+            - from: local_ai_search.event_outcome
+              to: event.outcome
+            - from: local_ai_search.error_message
+              to: error.message
+            - from: local_ai_search.error_type
+              to: error.type
+            - from: local_ai_search.elapsed_ms
+              to: labels.elapsed_ms
+          ignore_missing: true
+          fail_on_error: false
+      - timestamp:
+          field: local_ai_search.ts
+          target_field: "@timestamp"
+          layouts:
+            - "2006-01-02T15:04:05Z"
+          test:
+            - "2026-06-06T10:36:16Z"
+          ignore_missing: true
+          fail_on_error: false
+      - add_fields:
+          target: event
+          fields:
+            kind: event        
 
   # ---- OpenVPN runtime parsing ----
   - if:
